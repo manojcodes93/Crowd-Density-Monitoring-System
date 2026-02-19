@@ -1,0 +1,11 @@
+torch
+torchvision
+opencv-python
+numpy
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+matplotlib
+statsmodels
+scikit-learn
