@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Crowd Monitoring Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ========== SIDEBAR ========== -->
+    <aside class="sidebar">
+        <h2 class="logo">CrowdAI</h2>
+        <nav>
+            <a href="#">Dashboard</a>
+            <a href="#">Analytics</a>
+            <a href="#">System</a>
+        </nav>
+    </aside>
+
+    <!-- ========== MAIN CONTENT ========== -->
+    <main class="main">
+
+        <!-- Top Bar -->
+        <header class="topbar">
+            <h1>AI Crowd Monitoring Dashboard</h1>
+            <span class="status online">● Live System Active</span>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats">
+            <div class="card">
+                <h2 id="totalCount">12</h2>
+                <p>Total Crowd</p>
+            </div>
+
+            <div class="card">
+                <h2 id="zoneA">3</h2>
+                <p>Zone A</p>
+            </div>
+
+            <div class="card">
+                <h2 id="zoneB">2</h2>
+                <p>Zone B</p>
+            </div>
+
+            <div class="card">
+                <h2 id="zoneC">4</h2>
+                <p>Zone C</p>
+            </div>
+
+            <div class="card">
+                <h2 id="zoneD">3</h2>
+                <p>Zone D</p>
+            </div>
+        </div>
+
+        <!-- Alert Banner -->
+        <div class="alert danger" id="alertBox">
+            ⚠ Overcrowding Likely!
+        </div>
+
+        <!-- Heatmap + Prediction Section -->
+        <div class="heatmap-section">
+
+            <!-- Camera / Heatmap Area -->
+            <div class="heatmap-box">
+                <!-- Replace this with live stream later -->
+                Live Heatmap / Camera Feed
+            </div>
+
+            <!-- Prediction Panel -->
+            <div class="prediction-box">
+                <h3>Prediction</h3>
+                <p>Next 5s:</p>
+                <p class="highlight" id="predictionValue">14</p>
+
+                <br>
+
+                <h3>System Info</h3>
+                <p>Camera: Active</p>
+                <p>Model: Running</p>
+                <p>Logging: Enabled</p>
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+<!-- OPTIONAL: Future JS for live updates -->
+<script>
+    // Placeholder for future API integration
+    // Example:
+    // fetch('/stats').then(res => res.json()).then(data => { ... })
+</script>
+
+</body>
+</html>
