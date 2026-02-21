@@ -1,0 +1,16 @@
+camera:
+  mode: "ip"         # options: webcam | ip | video
+  webcam_index: 0
+
+  ip_stream: "http://192.168.0.30:8080/video"
+
+  video_path: "sample_video.mp4"
+
+system:
+  frame_width: 640
+  frame_height: 480
+  frame_skip: 3
+
+prediction:
+  threshold: 10
+  window_seconds: 5
