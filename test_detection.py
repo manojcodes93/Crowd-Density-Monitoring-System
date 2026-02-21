@@ -5,30 +5,10 @@ from app.density import calculate_zones
 from app.heatmap import generate_heatmap
 import csv
 from datetime import datetime
-import yaml
 
-# Load configuration
-with open("config/settings.yaml", "r") as file:
-    config = yaml.safe_load(file)
+cap = cv2.VideoCapture("http://192.168.0.30:8080/video")
 
-camera_config = config["camera"]
-system_config = config["system"]
-prediction_config = config["prediction"]
-
-
-if camera_config["mode"] == "webcam":
-    cap = cv2.VideoCapture(camera_config["webcam_index"])
-
-elif camera_config["mode"] == "ip":
-    cap = cv2.VideoCapture(camera_config["ip_stream"])
-
-elif camera_config["mode"] == "video":
-    cap = cv2.VideoCapture(camera_config["video_path"])
-
-else:
-    raise ValueError("Invalid camera mode in settings.yaml")
-
-frame_skip = system_config["frame_skip"]
+frame_skip = 3
 frame_count = 0
 
 boxes = []
@@ -46,8 +26,8 @@ if not file_exists:
 last_logged_time = None
 
 recent_counts = []
-prediction_threshold = prediction_config["threshold"]
-prediction_window = prediction_config["window_seconds"]
+prediction_threshold = 10
+prediction_window = 5
 
 predicted_value = 0
 prediction_alert = False
@@ -58,7 +38,7 @@ while True:
         break
 
     # Resize for faster inference
-    frame = cv2.resize(frame, (system_config["frame_width"], system_config["frame_height"]))
+    frame = cv2.resize(frame, (640, 480))
 
     frame_count += 1
 
