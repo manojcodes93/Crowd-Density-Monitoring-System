@@ -1,28 +1,18 @@
 from fastapi import FastAPI
+from app.state import live_data
+from app.engine import run_engine
 import threading
-from contextlib import asynccontextmanager
 
-from app.engine import start_engine, current_stats
+app = FastAPI()
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup logic
-    thread = threading.Thread(target=start_engine)
+# Start detection in background
+@app.on_event("startup")
+def start_engine():
+    print("Starting detection engine...")
+    thread = threading.Thread(target=run_engine)
     thread.daemon = True
     thread.start()
-    yield
-    # Shutdown logic (optional)
-
-
-app = FastAPI(lifespan=lifespan)
-
-
-@app.get("/health")
-def health():
-    return {"status": "Crowd Monitoring API Running"}
-
 
 @app.get("/stats")
 def get_stats():
-    return current_stats
+    return live_data

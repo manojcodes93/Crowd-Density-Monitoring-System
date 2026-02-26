@@ -6,7 +6,7 @@ from app.heatmap import generate_heatmap
 import csv
 from datetime import datetime
 
-cap = cv2.VideoCapture("http://192.168.0.30:8080/video")
+cap = cv2.VideoCapture("http://192.0.0.4:8080/video")
 
 frame_skip = 3
 frame_count = 0
