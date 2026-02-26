@@ -58,7 +58,7 @@
         </div>
 
         <!-- Alert Banner -->
-        <div class="alert danger" id="alertBox">
+        <div class="alert danger" id="alertBox" style="display:none;">
             ⚠ Overcrowding Likely!
         </div>
 
@@ -67,8 +67,7 @@
 
             <!-- Camera / Heatmap Area -->
             <div class="heatmap-box">
-                <!-- Replace this with live stream later -->
-                Live Heatmap / Camera Feed
+                <img src="http://127.0.0.1:8000/video" style="width:100%; height:100%; object-fit:cover;">
             </div>
 
             <!-- Prediction Panel -->
@@ -93,9 +92,33 @@
 
 <!-- OPTIONAL: Future JS for live updates -->
 <script>
-    // Placeholder for future API integration
-    // Example:
-    // fetch('/stats').then(res => res.json()).then(data => { ... })
+async function fetchStats() {
+    try {
+        const response = await fetch("http://127.0.0.1:8000/stats");
+        const data = await response.json();
+
+        document.getElementById("totalCount").innerText = data.total;
+        document.getElementById("zoneA").innerText = data.zoneA;
+        document.getElementById("zoneB").innerText = data.zoneB;
+        document.getElementById("zoneC").innerText = data.zoneC;
+        document.getElementById("zoneD").innerText = data.zoneD;
+        document.getElementById("predictionValue").innerText = data.prediction;
+
+        const alertBox = document.getElementById("alertBox");
+
+        if (data.alert) {
+            alertBox.style.display = "block";
+        } else {
+            alertBox.style.display = "none";
+        }
+
+    } catch (error) {
+        console.log("API not reachable");
+    }
+}
+
+setInterval(fetchStats, 1000);
+fetchStats();
 </script>
 
 </body>
