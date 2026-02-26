@@ -1,11 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>AI Crowd Monitoring Dashboard</title>
+    <title>AI Crowd Monitoring</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- External CSS -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -23,38 +22,33 @@
             <div class="status online">● System Online</div>
         </div>
 
-        <!-- ALERT -->
         <div id="alertBox"></div>
 
-        <!-- STATS -->
+        <!-- ================= STATS ================= -->
         <div class="stats">
             <div class="card">
                 <h2 id="totalCount">0</h2>
                 <p>Total Crowd</p>
             </div>
-
             <div class="card">
                 <h2 id="zoneA">0</h2>
                 <p>Zone A</p>
             </div>
-
             <div class="card">
                 <h2 id="zoneB">0</h2>
                 <p>Zone B</p>
             </div>
-
             <div class="card">
                 <h2 id="zoneC">0</h2>
                 <p>Zone C</p>
             </div>
-
             <div class="card">
                 <h2 id="zoneD">0</h2>
                 <p>Zone D</p>
             </div>
         </div>
 
-        <!-- HEATMAP -->
+        <!-- ================= LIVE STREAM ================= -->
         <div class="heatmap-section">
             <div class="heatmap-box">
                 <img src="/video" width="100%" height="100%">
@@ -66,11 +60,24 @@
             </div>
         </div>
 
+        <br><br>
+
+        <!-- ================= ANALYTICS SECTION ================= -->
+        <h2>📊 Live Analytics</h2>
+
+        <canvas id="crowdChart" height="80"></canvas>
+        <br>
+        <canvas id="zoneChart" height="80"></canvas>
+
     </main>
 
 </div>
 
 <script>
+
+let crowdChart;
+let zoneChart;
+
 async function fetchStats() {
     try {
         const response = await fetch("/stats");
@@ -94,12 +101,67 @@ async function fetchStats() {
         }
 
     } catch (error) {
-        console.log("API not reachable");
+        console.log("Stats API error");
     }
 }
 
+async function loadAnalytics() {
+    const response = await fetch("/log-data");
+    const data = await response.json();
+
+    const timestamps = data.map(d => d.timestamp);
+    const totals = data.map(d => Number(d.total));
+    const zoneA = data.map(d => Number(d.zoneA));
+    const zoneB = data.map(d => Number(d.zoneB));
+    const zoneC = data.map(d => Number(d.zoneC));
+    const zoneD = data.map(d => Number(d.zoneD));
+
+    if (crowdChart) crowdChart.destroy();
+    if (zoneChart) zoneChart.destroy();
+
+    crowdChart = new Chart(document.getElementById("crowdChart"), {
+        type: "line",
+        data: {
+            labels: timestamps,
+            datasets: [{
+                label: "Total Crowd",
+                data: totals,
+                borderColor: "#00f5ff",
+                fill: false,
+                tension: 0.2
+            }]
+        }
+    });
+
+    zoneChart = new Chart(document.getElementById("zoneChart"), {
+        type: "bar",
+        data: {
+            labels: ["Zone A", "Zone B", "Zone C", "Zone D"],
+            datasets: [{
+                label: "Latest Zone Distribution",
+                data: [
+                    zoneA[zoneA.length - 1] || 0,
+                    zoneB[zoneB.length - 1] || 0,
+                    zoneC[zoneC.length - 1] || 0,
+                    zoneD[zoneD.length - 1] || 0
+                ],
+                backgroundColor: [
+                    "#00f5ff",
+                    "#facc15",
+                    "#ff4d4d",
+                    "#00ff88"
+                ]
+            }]
+        }
+    });
+}
+
 setInterval(fetchStats, 1000);
+setInterval(loadAnalytics, 5000);
+
 fetchStats();
+loadAnalytics();
+
 </script>
 
 </body>

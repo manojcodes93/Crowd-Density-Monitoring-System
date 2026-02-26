@@ -1,17 +1,17 @@
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import threading
 import cv2
 import time
+import csv
 
 import app.state as state
 from app.engine import run_engine
 
 app = FastAPI()
 
-# Serve static CSS
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 
@@ -20,7 +20,6 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 # ===============================
 @app.on_event("startup")
 def start_engine():
-    print("Starting detection engine...")
     thread = threading.Thread(target=run_engine)
     thread.daemon = True
     thread.start()
@@ -31,8 +30,15 @@ def start_engine():
 # ===============================
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    html_path = Path("frontend/dashboard.html")
-    return html_path.read_text(encoding="utf-8")
+    return Path("frontend/dashboard.html").read_text(encoding="utf-8")
+
+
+# ===============================
+# ANALYTICS PAGE
+# ===============================
+@app.get("/analytics", response_class=HTMLResponse)
+def analytics_page():
+    return Path("frontend/analytics.html").read_text(encoding="utf-8")
 
 
 # ===============================
@@ -41,6 +47,22 @@ def dashboard():
 @app.get("/stats")
 def get_stats():
     return state.live_data
+
+
+# ===============================
+# LOG DATA API
+# ===============================
+@app.get("/log-data")
+def get_log_data():
+    data = []
+    try:
+        with open("crowd_log.csv", "r") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                data.append(row)
+    except:
+        pass
+    return JSONResponse(data)
 
 
 # ===============================
