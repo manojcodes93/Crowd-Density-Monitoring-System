@@ -167,3 +167,12 @@ body {
     color: #facc15;
     font-weight: bold;
 }
+
+canvas {
+    display: block;
+    width: 100% !important;
+    height: 300px !important;
+    background: #161b22;
+    border-radius: 10px;
+    margin-bottom: 30px;
+}

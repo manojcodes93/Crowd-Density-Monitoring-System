@@ -12,12 +12,13 @@ from app.engine import run_engine
 
 app = FastAPI()
 
+# Mount frontend folder
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 
-# ===============================
-# START ENGINE
-# ===============================
+# =========================
+# START BACKGROUND ENGINE
+# =========================
 @app.on_event("startup")
 def start_engine():
     thread = threading.Thread(target=run_engine)
@@ -25,49 +26,59 @@ def start_engine():
     thread.start()
 
 
-# ===============================
-# DASHBOARD
-# ===============================
+# =========================
+# DASHBOARD ROUTE
+# =========================
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
     return Path("frontend/dashboard.html").read_text(encoding="utf-8")
 
 
-# ===============================
-# ANALYTICS PAGE
-# ===============================
-@app.get("/analytics", response_class=HTMLResponse)
-def analytics_page():
-    return Path("frontend/analytics.html").read_text(encoding="utf-8")
-
-
-# ===============================
-# STATS API
-# ===============================
+# =========================
+# LIVE STATS
+# =========================
 @app.get("/stats")
 def get_stats():
     return state.live_data
 
 
-# ===============================
-# LOG DATA API
-# ===============================
+# =========================
+# FIXED ANALYTICS ENDPOINT
+# =========================
 @app.get("/log-data")
 def get_log_data():
+    log_path = Path("crowd_log.csv")
+
+    if not log_path.exists():
+        return []
+
     data = []
-    try:
-        with open("crowd_log.csv", "r") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                data.append(row)
-    except:
-        pass
+
+    with open(log_path, "r") as file:
+        reader = csv.DictReader(file)
+
+        for row in reader:
+            try:
+                data.append({
+                    "timestamp": row["timestamp"],
+                    "total": int(row["total"]),
+                    "zoneA": int(row["zoneA"]),
+                    "zoneB": int(row["zoneB"]),
+                    "zoneC": int(row["zoneC"]),
+                    "zoneD": int(row["zoneD"]),
+                    "prediction": int(row["prediction"]),
+                    "alert": row["alert"].strip().lower() == "true"
+                })
+            except (ValueError, KeyError):
+                # Skip corrupted lines
+                continue
+
     return JSONResponse(data)
 
 
-# ===============================
+# =========================
 # VIDEO STREAM
-# ===============================
+# =========================
 def generate_video():
     while True:
         with state.lock:
@@ -81,12 +92,10 @@ def generate_video():
         if not ret:
             continue
 
-        frame_bytes = buffer.tobytes()
-
         yield (
             b"--frame\r\n"
             b"Content-Type: image/jpeg\r\n\r\n" +
-            frame_bytes +
+            buffer.tobytes() +
             b"\r\n"
         )
 

@@ -1,8 +1,8 @@
 import cv2
 import time
 import csv
-import os
 from datetime import datetime
+import pathlib
 
 import app.state as state
 from app.detection import detect_people
@@ -22,6 +22,29 @@ def run_engine():
     print("Camera opened successfully")
 
     # ==========================
+    # FORCE LOG FILE TO ROOT DIR
+    # ==========================
+    BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
+    log_file = BASE_DIR / "crowd_log.csv"
+
+    print("Logging to:", log_file)
+
+    # Create file with header if not exists
+    if not log_file.exists():
+        with open(log_file, mode="w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow([
+                "timestamp",
+                "total",
+                "zoneA",
+                "zoneB",
+                "zoneC",
+                "zoneD",
+                "prediction",
+                "alert"
+            ])
+
+    # ==========================
     # FRAME CONTROL
     # ==========================
     frame_skip = 3
@@ -37,24 +60,8 @@ def run_engine():
     prediction_threshold = 10
 
     # ==========================
-    # LOGGING SETUP
+    # LOGGING CONTROL
     # ==========================
-    log_file = "crowd_log.csv"
-
-    if not os.path.exists(log_file):
-        with open(log_file, mode="w", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "timestamp",
-                "total",
-                "zoneA",
-                "zoneB",
-                "zoneC",
-                "zoneD",
-                "prediction",
-                "alert"
-            ])
-
     last_log_time = 0
     log_interval = 2  # seconds
 
@@ -78,7 +85,7 @@ def run_engine():
         # Generate heatmap
         heatmap_frame = generate_heatmap(frame, boxes)
 
-        # Update shared output frame
+        # Update shared frame
         with state.lock:
             state.output_frame = heatmap_frame.copy()
 
@@ -114,11 +121,13 @@ def run_engine():
         state.live_data["alert"] = alert
 
         # ==========================
-        # LOGGING (EVERY 2 SECONDS)
+        # LOGGING EVERY 2 SECONDS
         # ==========================
         current_time = time.time()
 
         if current_time - last_log_time >= log_interval:
+            print("Logging row:", count)
+
             with open(log_file, mode="a", newline="") as file:
                 writer = csv.writer(file)
                 writer.writerow([
@@ -131,4 +140,5 @@ def run_engine():
                     predicted_value,
                     alert
                 ])
+
             last_log_time = current_time
