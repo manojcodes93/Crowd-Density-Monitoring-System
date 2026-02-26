@@ -4,97 +4,76 @@
     <meta charset="UTF-8">
     <title>AI Crowd Monitoring Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css">
+
+    <!-- External CSS -->
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
 <div class="container">
 
-    <!-- ========== SIDEBAR ========== -->
     <aside class="sidebar">
-        <h2 class="logo">CrowdAI</h2>
-        <nav>
-            <a href="#">Dashboard</a>
-            <a href="#">Analytics</a>
-            <a href="#">System</a>
-        </nav>
+        <div class="logo">CrowdAI</div>
     </aside>
 
-    <!-- ========== MAIN CONTENT ========== -->
     <main class="main">
 
-        <!-- Top Bar -->
-        <header class="topbar">
-            <h1>AI Crowd Monitoring Dashboard</h1>
-            <span class="status online">● Live System Active</span>
-        </header>
+        <div class="topbar">
+            <h1>AI Crowd Monitoring</h1>
+            <div class="status online">● System Online</div>
+        </div>
 
-        <!-- Stats Cards -->
+        <!-- ALERT -->
+        <div id="alertBox"></div>
+
+        <!-- STATS -->
         <div class="stats">
             <div class="card">
-                <h2 id="totalCount">12</h2>
+                <h2 id="totalCount">0</h2>
                 <p>Total Crowd</p>
             </div>
 
             <div class="card">
-                <h2 id="zoneA">3</h2>
+                <h2 id="zoneA">0</h2>
                 <p>Zone A</p>
             </div>
 
             <div class="card">
-                <h2 id="zoneB">2</h2>
+                <h2 id="zoneB">0</h2>
                 <p>Zone B</p>
             </div>
 
             <div class="card">
-                <h2 id="zoneC">4</h2>
+                <h2 id="zoneC">0</h2>
                 <p>Zone C</p>
             </div>
 
             <div class="card">
-                <h2 id="zoneD">3</h2>
+                <h2 id="zoneD">0</h2>
                 <p>Zone D</p>
             </div>
         </div>
 
-        <!-- Alert Banner -->
-        <div class="alert danger" id="alertBox" style="display:none;">
-            ⚠ Overcrowding Likely!
-        </div>
-
-        <!-- Heatmap + Prediction Section -->
+        <!-- HEATMAP -->
         <div class="heatmap-section">
-
-            <!-- Camera / Heatmap Area -->
             <div class="heatmap-box">
-                <img src="http://127.0.0.1:8000/video" style="width:100%; height:100%; object-fit:cover;">
+                <img src="/video" width="100%" height="100%">
             </div>
 
-            <!-- Prediction Panel -->
             <div class="prediction-box">
-                <h3>Prediction</h3>
-                <p>Next 5s:</p>
-                <p class="highlight" id="predictionValue">14</p>
-
-                <br>
-
-                <h3>System Info</h3>
-                <p>Camera: Active</p>
-                <p>Model: Running</p>
-                <p>Logging: Enabled</p>
+                <h3>Prediction (Next 5s)</h3>
+                <div class="highlight" id="predictionValue">0</div>
             </div>
-
         </div>
 
     </main>
 
 </div>
 
-<!-- OPTIONAL: Future JS for live updates -->
 <script>
 async function fetchStats() {
     try {
-        const response = await fetch("http://127.0.0.1:8000/stats");
+        const response = await fetch("/stats");
         const data = await response.json();
 
         document.getElementById("totalCount").innerText = data.total;
@@ -107,9 +86,11 @@ async function fetchStats() {
         const alertBox = document.getElementById("alertBox");
 
         if (data.alert) {
-            alertBox.style.display = "block";
+            alertBox.innerHTML = `<div class="alert danger">
+                ⚠ Overcrowding Predicted!
+            </div>`;
         } else {
-            alertBox.style.display = "none";
+            alertBox.innerHTML = "";
         }
 
     } catch (error) {

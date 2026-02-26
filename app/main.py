@@ -1,37 +1,23 @@
 from fastapi import FastAPI
-from app.state import live_data
-from app.engine import run_engine
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 import threading
-from fastapi.responses import StreamingResponse
 import cv2
-from app.engine import output_frame, lock
 import time
+
+import app.state as state
+from app.engine import run_engine
 
 app = FastAPI()
 
-def generate_video():
-    while True:
-        with lock:
-            if output_frame is None:
-                time.sleep(0.01)
-                continue
-            ret, buffer = cv2.imencode('.jpg', output_frame)
-            frame = buffer.tobytes()
+# Serve static CSS
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-        time.sleep(0.03)
 
-@app.get("/video")
-def video_feed():
-    return StreamingResponse(generate_video(),
-        media_type="multipart/x-mixed-replace; boundary=frame")
-
-@app.get("/")
-def root():
-    return {"message": "Crowd Monitoring API is running"}
-
-# Start detection in background
+# ===============================
+# START ENGINE
+# ===============================
 @app.on_event("startup")
 def start_engine():
     print("Starting detection engine...")
@@ -39,6 +25,55 @@ def start_engine():
     thread.daemon = True
     thread.start()
 
+
+# ===============================
+# DASHBOARD
+# ===============================
+@app.get("/", response_class=HTMLResponse)
+def dashboard():
+    html_path = Path("frontend/dashboard.html")
+    return html_path.read_text(encoding="utf-8")
+
+
+# ===============================
+# STATS API
+# ===============================
 @app.get("/stats")
 def get_stats():
-    return live_data
+    return state.live_data
+
+
+# ===============================
+# VIDEO STREAM
+# ===============================
+def generate_video():
+    while True:
+        with state.lock:
+            if state.output_frame is None:
+                time.sleep(0.01)
+                continue
+
+            frame = state.output_frame.copy()
+
+        ret, buffer = cv2.imencode(".jpg", frame)
+        if not ret:
+            continue
+
+        frame_bytes = buffer.tobytes()
+
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" +
+            frame_bytes +
+            b"\r\n"
+        )
+
+        time.sleep(0.03)
+
+
+@app.get("/video")
+def video_feed():
+    return StreamingResponse(
+        generate_video(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )

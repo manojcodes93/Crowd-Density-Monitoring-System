@@ -1,3 +1,5 @@
+import threading
+
 live_data = {
     "total": 0,
     "zoneA": 0,
@@ -7,3 +9,9 @@ live_data = {
     "prediction": 0,
     "alert": False
 }
+
+# Shared video frame
+output_frame = None
+
+# Shared lock
+lock = threading.Lock()

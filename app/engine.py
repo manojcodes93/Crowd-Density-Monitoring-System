@@ -1,21 +1,13 @@
 import cv2
 import time
-import threading
+import app.state as state
 
 from app.detection import detect_people
 from app.density import calculate_zones
-from app.state import live_data
 from app.heatmap import generate_heatmap
-
-# Shared frame for video streaming
-output_frame = None
-lock = threading.Lock()
 
 
 def run_engine():
-
-    global output_frame
-
     print("Engine starting...")
 
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
@@ -39,29 +31,27 @@ def run_engine():
         ret, frame = cap.read()
 
         if not ret:
-            print("⚠ Frame not received")
             time.sleep(0.1)
             continue
 
-        # Resize frame
         frame = cv2.resize(frame, (640, 480))
         frame_count += 1
 
-        # Run detection every N frames
+        # Run detection every few frames
         if frame_count % frame_skip == 0:
             boxes, count = detect_people(frame)
 
-        # Calculate zone distribution
-        zones = calculate_zones(boxes, frame.shape)
-
-        # Generate heatmap overlay
+        # Generate heatmap
         heatmap_frame = generate_heatmap(frame, boxes)
 
-        # Store frame for streaming
-        with lock:
-            output_frame = heatmap_frame.copy()
+        # 🔥 Update shared output frame
+        with state.lock:
+            state.output_frame = heatmap_frame.copy()
 
-        # ---------------- Prediction Logic ----------------
+        # Zone calculation
+        zones = calculate_zones(boxes, frame.shape)
+
+        # Prediction logic
         recent_counts.append(count)
         if len(recent_counts) > 10:
             recent_counts.pop(0)
@@ -76,11 +66,11 @@ def run_engine():
             if predicted_value >= prediction_threshold:
                 alert = True
 
-        # Update shared live state
-        live_data["total"] = count
-        live_data["zoneA"] = zones["A"]
-        live_data["zoneB"] = zones["B"]
-        live_data["zoneC"] = zones["C"]
-        live_data["zoneD"] = zones["D"]
-        live_data["prediction"] = predicted_value
-        live_data["alert"] = alert
+        # 🔥 Update shared live data
+        state.live_data["total"] = count
+        state.live_data["zoneA"] = zones["A"]
+        state.live_data["zoneB"] = zones["B"]
+        state.live_data["zoneC"] = zones["C"]
+        state.live_data["zoneD"] = zones["D"]
+        state.live_data["prediction"] = predicted_value
+        state.live_data["alert"] = alert
