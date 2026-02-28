@@ -19,8 +19,8 @@ def get_analytics():
     try:
         with open("crowd_log.csv", "r") as file:
             reader = csv.DictReader(file)
-            for row in reader:
-                data.append(row)
+            rows = list(reader)
+            data = rows[-30:]  # only last 30 entries
     except:
         pass
     return JSONResponse(data)

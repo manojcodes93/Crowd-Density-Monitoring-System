@@ -1,8 +1,12 @@
 import cv2
 import time
 import numpy as np
+import csv
+import os
+from datetime import datetime
 import app.state as state
 from app.detection import detect_people
+
 
 def run_engine(source):
 
@@ -12,10 +16,18 @@ def run_engine(source):
         print(f"Failed to open camera source: {source}")
         return
 
+    # ---------- CREATE CSV HEADER IF NOT EXISTS ----------
+    if not os.path.exists("crowd_log.csv"):
+        with open("crowd_log.csv", "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["timestamp","total","zoneA","zoneB","zoneC","zoneD"])
+
     accumulated_heatmap = None
     recent_counts = []
     prediction_window = 5
     threshold = 5
+
+    last_log_time = 0  # control 1-second logging
 
     state.engine_running = True
 
@@ -34,6 +46,7 @@ def run_engine(source):
         mid_x = width // 2
         mid_y = height // 2
 
+        # ---------- DETECTION ----------
         boxes, count = detect_people(frame)
 
         zone_counts = {"A":0, "B":0, "C":0, "D":0}
@@ -75,6 +88,7 @@ def run_engine(source):
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0,255,0), 2)
 
+        # ---------- PREDICTION ----------
         recent_counts.append(count)
         if len(recent_counts) > 10:
             recent_counts.pop(0)
@@ -88,6 +102,7 @@ def run_engine(source):
             if predicted >= threshold:
                 alert_flag = True
 
+        # ---------- HEATMAP ----------
         normalized = cv2.normalize(accumulated_heatmap, None, 0, 255, cv2.NORM_MINMAX)
         normalized = normalized.astype(np.uint8)
 
@@ -107,12 +122,29 @@ def run_engine(source):
             cv2.putText(overlay, "OVER CROWD ALERT!", (20,120),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 3)
 
+        # ---------- UPDATE STATE ----------
         with state.lock:
             state.output_frame = overlay.copy()
             state.current_count = count
             state.zones = zone_counts
             state.prediction = predicted
             state.alert = alert_flag
+
+        # ---------- LOG EVERY 1 SECOND ----------
+        current_time = time.time()
+        if current_time - last_log_time >= 1:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            with open("crowd_log.csv", "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    timestamp,
+                    count,
+                    zone_counts["A"],
+                    zone_counts["B"],
+                    zone_counts["C"],
+                    zone_counts["D"]
+                ])
+            last_log_time = current_time
 
         time.sleep(0.03)
 
