@@ -1,56 +1,52 @@
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
-from fastapi import UploadFile, File
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse, HTMLResponse
 import threading
 import cv2
 import time
-import csv
 import shutil
 import app.state as state
 from app.engine import run_engine
+from app.database import init_db, get_last_logs
 
 app = FastAPI()
-
-# ------------------ ANALYTICS API ------------------
-
-@app.get("/analytics")
-def get_analytics():
-    data = []
-    try:
-        with open("crowd_log.csv", "r") as file:
-            reader = csv.DictReader(file)
-            rows = list(reader)
-            data = rows[-30:]  # only last 30 entries
-    except:
-        pass
-    return JSONResponse(data)
 
 # ------------------ ENGINE CONTROL ------------------
 
 CAMERA_SOURCE = 0
 engine_thread = None
 
+
 def start_camera(source):
     global engine_thread
 
-    # Stop old engine safely
+    # Stop previous engine safely
     if state.engine_running:
         state.engine_running = False
         time.sleep(1)
 
-    # Start new engine
     engine_thread = threading.Thread(target=run_engine, args=(source,))
     engine_thread.daemon = True
     engine_thread.start()
 
+
 @app.on_event("startup")
 def startup():
+    init_db()               # ✅ Initialize database
     start_camera(CAMERA_SOURCE)
+
 
 @app.post("/set-camera")
 def set_camera(source: str):
     start_camera(source)
     return {"status": "Camera switched", "source": source}
+
+
+# ------------------ ANALYTICS API (SQLite) ------------------
+
+@app.get("/analytics")
+def get_analytics():
+    return get_last_logs(30)
+
 
 # ------------------ DASHBOARD ------------------
 
@@ -113,10 +109,8 @@ def home():
                     document.getElementById("cameraStatus").innerText = "Switching...";
 
                     try {
-                        const res = await fetch("/set-camera", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(source)
+                        const res = await fetch("/set-camera?source=" + source, {
+                            method: "POST"
                         });
 
                         const data = await res.json();
@@ -174,10 +168,9 @@ def home():
 
                     if (!data || data.length === 0) return;
 
-                    const recent = data.slice(-20);
-                    const labels = recent.map(d => d.timestamp);
-                    const totals = recent.map(d => Number(d.total));
-                    const last = recent[recent.length - 1];
+                    const labels = data.map(d => d.timestamp);
+                    const totals = data.map(d => Number(d.total));
+                    const last = data[data.length - 1];
 
                     const ctx1 = document.getElementById("crowdChart").getContext("2d");
                     const ctx2 = document.getElementById("zoneChart").getContext("2d");
@@ -232,6 +225,7 @@ def home():
     </html>
     """
 
+
 # ------------------ STATS API ------------------
 
 @app.get("/stats")
@@ -243,6 +237,7 @@ def get_stats():
             "prediction": state.prediction,
             "alert": state.alert
         }
+
 
 # ------------------ VIDEO STREAM ------------------
 
@@ -267,12 +262,14 @@ def generate_frames():
 
         time.sleep(0.03)
 
+
 @app.get("/video")
 def video_feed():
     return StreamingResponse(
         generate_frames(),
         media_type='multipart/x-mixed-replace; boundary=frame'
     )
+
 
 # ------------------ VIDEO UPLOAD ------------------
 
