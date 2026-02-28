@@ -9,3 +9,5 @@ psycopg2-binary
 matplotlib
 statsmodels
 scikit-learn
+ultralytics
+python-multipart

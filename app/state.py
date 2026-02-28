@@ -1,5 +1,7 @@
 import threading
 
+lock = threading.Lock()
+
 output_frame = None
 current_count = 0
 
@@ -10,4 +12,8 @@ zones = {
     "D": 0
 }
 
-lock = threading.Lock()
+prediction = 0
+alert = False
+
+camera_source = 0
+engine_running = False

@@ -1,41 +1,26 @@
-import torch
-import torchvision
+from ultralytics import YOLO
 import cv2
-import numpy as np
-from torchvision import transforms
 
-# Loading pretrained Faster R-CNN (trained on COCO dataset)
-from torchvision.models.detection import (
-    fasterrcnn_mobilenet_v3_large_fpn,
-    FasterRCNN_MobileNet_V3_Large_FPN_Weights
-)
+# Load YOLOv8 nano model (lightweight, fast)
+model = YOLO("yolov8n.pt")
 
-weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.DEFAULT
-model = fasterrcnn_mobilenet_v3_large_fpn(weights=weights)
-model.eval()
+def detect_people(frame, confidence_threshold=0.4):
 
-# Convert image to PyTorch tensor
-transform = transforms.Compose([
-    transforms.ToTensor()
-])
-
-def detect_people(frame, confidence_threshold=0.6):
-    image = transform(frame) # Convert frame to tensor
-
-    with torch.no_grad():
-        outputs = model([image])[0] # Run detection (model expects list)
+    results = model(frame, verbose=False)
 
     boxes = []
     count = 0
 
-    for i in range(len(outputs['boxes'])):
-        label = outputs['labels'][i]
-        score = outputs['scores'][i]
-        
-        # Class 1 = Person (COCO), filter by confidence
-        if label == 1 and score > confidence_threshold:
-            box = outputs['boxes'][i].detach().cpu().numpy().astype(int)
-            boxes.append(box)  # Store bounding box
-            count += 1         # Increase person count
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls[0])
+
+            # Class 0 = person in COCO
+            if cls == 0:
+                conf = float(box.conf[0])
+                if conf >= confidence_threshold:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    boxes.append((x1, y1, x2, y2))
+                    count += 1
 
     return boxes, count
