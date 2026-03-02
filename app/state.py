@@ -18,3 +18,4 @@ status = "NORMAL"
 
 camera_source = 0
 engine_running = False
+camera_connected = False

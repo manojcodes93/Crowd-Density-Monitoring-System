@@ -10,15 +10,6 @@ from app.database import insert_log
 def run_engine(source):
     print("Engine started with source:", source)
 
-    cap = cv2.VideoCapture(source)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-    if not cap.isOpened():
-        print(f"Failed to open camera source: {source}")
-        state.engine_running = False
-        return
-    print("Camera opened successfully:", cap.isOpened())
-
     # ---------- CONFIG ----------
     prediction_window = 5
     density_threshold = 0.00005     # crowd density threshold
@@ -39,166 +30,155 @@ def run_engine(source):
 
     while state.engine_running:
 
-        loop_start = time.time()
+        # ---------------- RECONNECT LOOP ----------------
+        while True:
+            cap = cv2.VideoCapture(source)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        # Grab latest frame to avoid lag
-        if not cap.grab():
-            continue
-
-        ret, frame = cap.retrieve()
-        if not ret:
-            continue
-
-        frame = cv2.resize(frame, (640, 480))
-
-        height, width, _ = frame.shape
-        frame_area = width * height
-        mid_x = width // 2
-        mid_y = height // 2
-
-        # ---------- FRAME SKIPPING ----------
-        frame_count += 1
-        if frame_count % 12 == 0:
-            detect_start = time.time()
-            last_boxes, last_count = detect_people(frame)
-            processing_time = time.time() - detect_start
-        else:
-            processing_time = 0
-
-        boxes = last_boxes
-        count = last_count
-
-        # ---------- ZONE COUNT ----------
-        zone_counts = {"A": 0, "B": 0, "C": 0, "D": 0}
-
-        for (x1, y1, x2, y2) in boxes:
-
-            center_x = (x1 + x2) // 2
-            center_y = (y1 + y2) // 2
-
-            if center_x < mid_x and center_y < mid_y:
-                zone_counts["A"] += 1
-            elif center_x >= mid_x and center_y < mid_y:
-                zone_counts["B"] += 1
-            elif center_x < mid_x and center_y >= mid_y:
-                zone_counts["C"] += 1
+            if cap.isOpened():
+                print("Camera connected")
+                with state.lock:
+                    state.camera_connected = True
+                break
             else:
-                zone_counts["D"] += 1
+                print("Camera connection failed. Retrying in 5 seconds...")
+                with state.lock:
+                    state.camera_connected = False
+                time.sleep(5)
 
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        # ---------------- FRAME PROCESSING LOOP ----------------
+        while state.engine_running and cap.isOpened():
 
-        # ---------- DENSITY CALCULATION ----------
-        density = count / frame_area
+            loop_start = time.time()
 
-        # ---------- STATUS CLASSIFICATION ----------
-        if density < density_threshold * 0.7:
-            status = "NORMAL"
-            status_color = (0, 255, 0)
-        elif density < density_threshold:
-            status = "MODERATE"
-            status_color = (0, 255, 255)
-        else:
-            status = "CRITICAL"
-            status_color = (0, 0, 255)
+            if not cap.grab():
+                print("Camera lost. Reconnecting...")
+                with state.lock:
+                    state.camera_connected = False
+                cap.release()
+                break
 
-        # ---------- SUSTAINED ALERT LOGIC ----------
-        alert_flag = False
+            ret, frame = cap.retrieve()
+            if not ret:
+                continue
 
-        if density >= density_threshold:
-            if alert_start_time is None:
-                alert_start_time = time.time()
-            elif time.time() - alert_start_time >= sustained_seconds:
-                alert_flag = True
-        else:
-            alert_start_time = None
+            frame = cv2.resize(frame, (640, 480))
 
-        # ---------- PREDICTION ----------
-        recent_counts.append(count)
-        if len(recent_counts) > 10:
-            recent_counts.pop(0)
+            height, width, _ = frame.shape
+            frame_area = width * height
+            mid_x = width // 2
+            mid_y = height // 2
 
-        predicted = count
-        if len(recent_counts) >= 2:
-            growth = (recent_counts[-1] - recent_counts[0]) / len(recent_counts)
-            predicted = int(count + growth * prediction_window)
+            # ---------- FRAME SKIPPING ----------
+            frame_count += 1
+            if frame_count % 12 == 0:
+                detect_start = time.time()
+                last_boxes, last_count = detect_people(frame)
+                processing_time = time.time() - detect_start
+            else:
+                processing_time = 0
 
-        # ---------- DRAW UI ----------
-        cv2.line(frame, (mid_x, 0), (mid_x, height), (255, 255, 255), 1)
-        cv2.line(frame, (0, mid_y), (width, mid_y), (255, 255, 255), 1)
+            boxes = last_boxes
+            count = last_count
 
-        cv2.putText(frame, f"People: {count}", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            zone_counts = {"A": 0, "B": 0, "C": 0, "D": 0}
 
-        cv2.putText(frame, f"Predicted: {predicted}", (20, 75),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            for (x1, y1, x2, y2) in boxes:
 
-        cv2.putText(frame, f"Status: {status}",
-                    (width - 200, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.8,
-                    status_color,
-                    2)
+                center_x = (x1 + x2) // 2
+                center_y = (y1 + y2) // 2
 
-        if alert_flag:
-            cv2.putText(frame, "ALERT TRIGGERED",
-                        (width - 250, 80),
+                if center_x < mid_x and center_y < mid_y:
+                    zone_counts["A"] += 1
+                elif center_x >= mid_x and center_y < mid_y:
+                    zone_counts["B"] += 1
+                elif center_x < mid_x and center_y >= mid_y:
+                    zone_counts["C"] += 1
+                else:
+                    zone_counts["D"] += 1
+
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+            density = count / frame_area
+
+            if density < density_threshold * 0.7:
+                status = "NORMAL"
+                status_color = (0, 255, 0)
+            elif density < density_threshold:
+                status = "MODERATE"
+                status_color = (0, 255, 255)
+            else:
+                status = "CRITICAL"
+                status_color = (0, 0, 255)
+
+            alert_flag = False
+
+            if density >= density_threshold:
+                if alert_start_time is None:
+                    alert_start_time = time.time()
+                elif time.time() - alert_start_time >= sustained_seconds:
+                    alert_flag = True
+            else:
+                alert_start_time = None
+
+            recent_counts.append(count)
+            if len(recent_counts) > 10:
+                recent_counts.pop(0)
+
+            predicted = count
+            if len(recent_counts) >= 2:
+                growth = (recent_counts[-1] - recent_counts[0]) / len(recent_counts)
+                predicted = int(count + growth * prediction_window)
+
+            cv2.line(frame, (mid_x, 0), (mid_x, height), (255, 255, 255), 1)
+            cv2.line(frame, (0, mid_y), (width, mid_y), (255, 255, 255), 1)
+
+            cv2.putText(frame, f"People: {count}", (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+            cv2.putText(frame, f"Predicted: {predicted}", (20, 75),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+
+            cv2.putText(frame, f"Status: {status}",
+                        (width - 200, 40),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9,
-                        (0, 0, 255),
+                        0.8,
+                        status_color,
                         2)
 
-        # ---------- PERFORMANCE METRICS ----------
-        current_time = time.time()
-        time_diff = current_time - last_fps_time
-        if time_diff > 0:
-            fps = 1 / time_diff
-        else:
-            fps = 0
-        
-        last_fps_time = current_time
+            current_time = time.time()
+            time_diff = current_time - last_fps_time
 
-        cv2.putText(frame, f"FPS: {int(fps)}",
-                    (width - 120, height - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (255, 255, 0),
-                    2)
+            if time_diff > 0:
+                fps = 1 / time_diff
+            else:
+                fps = 0
 
-        if processing_time > 0:
-            cv2.putText(frame, f"Inference: {processing_time:.3f}s",
-                        (20, 110),
+            last_fps_time = current_time
+
+            cv2.putText(frame, f"FPS: {int(fps)}",
+                        (width - 120, height - 20),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.6,
                         (255, 255, 0),
                         2)
 
-        cv2.putText(frame, f"Source: {source}",
-                    (20, height - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.6,
-                    (200, 200, 200),
-                    1)
+            with state.lock:
+                state.output_frame = frame.copy()
+                state.current_count = count
+                state.zones = zone_counts
+                state.prediction = predicted
+                state.alert = alert_flag
+                state.status = status
 
-        # ---------- UPDATE STATE ----------
-        with state.lock:
-            state.output_frame = frame.copy()
-            state.current_count = count
-            state.zones = zone_counts
-            state.prediction = predicted
-            state.alert = alert_flag
-            state.status = status
-
-        # ---------- DATABASE LOG ----------
-        if current_time - last_log_time >= 1:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            insert_log(
-                timestamp,
-                count,
-                zone_counts["A"],
-                zone_counts["B"],
-                zone_counts["C"],
-                zone_counts["D"]
-            )
-            last_log_time = current_time
-
-    cap.release()
+            if current_time - last_log_time >= 1:
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                insert_log(
+                    timestamp,
+                    count,
+                    zone_counts["A"],
+                    zone_counts["B"],
+                    zone_counts["C"],
+                    zone_counts["D"]
+                )
+                last_log_time = current_time
