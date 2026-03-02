@@ -139,8 +139,8 @@ Camera sources can be switched dynamically via API calls without restarting the 
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repository-url>
-cd <project-directory>
+git clone https://github.com/manojcodes93/Crowd-Density-Monitoring-System.git
+cd Crowd-Density-Monitoring-System
 ```
 
 2. Install Dependencies
