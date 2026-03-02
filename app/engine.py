@@ -41,9 +41,10 @@ def run_engine(source):
                     state.camera_connected = True
                 break
             else:
-                print("Camera connection failed. Retrying in 5 seconds...")
+                print(f"Unable to connect to source: {source}. Retrying in 5 seconds...")
                 with state.lock:
                     state.camera_connected = False
+                    state.output_frame = None
                 time.sleep(5)
 
         # ---------------- FRAME PROCESSING LOOP ----------------
@@ -60,7 +61,11 @@ def run_engine(source):
 
             ret, frame = cap.retrieve()
             if not ret:
-                continue
+                print("Frame retrieval failed. Possible corrupted stream.")
+                with state.lock:
+                    state.camera_connected = False
+                cap.release()
+                break
 
             frame = cv2.resize(frame, (640, 480))
 

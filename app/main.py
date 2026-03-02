@@ -22,10 +22,14 @@ def start_camera(source):
     if isinstance(source, str) and source.isdigit():
         source = int(source)
 
+    # Stop existing engine safely
     if state.engine_running:
         state.engine_running = False
-        time.sleep(1)
 
+        if engine_thread is not None and engine_thread.is_alive():
+            engine_thread.join(timeout=3)
+
+    # Start new engine
     engine_thread = threading.Thread(target=run_engine, args=(source,))
     engine_thread.daemon = True
     engine_thread.start()
@@ -222,12 +226,14 @@ async function updateStats() {
     document.getElementById("prediction").innerText = data.prediction;
     document.getElementById("alert").innerText = data.status;
 
+    const alertElement = document.getElementById("alert");
+
     if (data.status === "CRITICAL")
-        alert.style.color = "#ef4444";
+        alertElement.style.color = "#ef4444";
     else if (data.status === "MODERATE")
-        alert.style.color = "#facc15";
+        alertElement.style.color = "#facc15";
     else
-        alert.style.color = "#22c55e";
+        alertElement.style.color = "#22c55e";
 }
 
 async function loadAnalytics() {
@@ -275,3 +281,13 @@ loadAnalytics();
 </body>
 </html>
 """
+
+@app.on_event("shutdown")
+def shutdown_event():
+    global engine_thread
+    state.engine_running = False
+
+    if engine_thread is not None and engine_thread.is_alive():
+        engine_thread.join(timeout=3)
+
+    print("Engine shut down cleanly.")
