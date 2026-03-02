@@ -8,22 +8,29 @@ from app.database import insert_log
 
 
 def run_engine(source):
+    print("Engine started with source:", source)
 
     cap = cv2.VideoCapture(source)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     if not cap.isOpened():
         print(f"Failed to open camera source: {source}")
+        state.engine_running = False
         return
+    print("Camera opened successfully:", cap.isOpened())
 
-    accumulated_heatmap = None
-    recent_counts = []
+    # ---------- CONFIG ----------
     prediction_window = 5
-    threshold = 5
+    density_threshold = 0.00005     # crowd density threshold
+    sustained_seconds = 3           # alert after 3 seconds sustained
 
+    recent_counts = []
     last_log_time = 0
     frame_count = 0
     last_boxes = []
     last_count = 0
+
+    alert_start_time = None
 
     last_fps_time = time.time()
     fps = 0
@@ -32,33 +39,40 @@ def run_engine(source):
 
     while state.engine_running:
 
-        ret, frame = cap.read()
-        if not ret:
-            time.sleep(0.1)
+        loop_start = time.time()
+
+        # Grab latest frame to avoid lag
+        if not cap.grab():
             continue
 
+        ret, frame = cap.retrieve()
+        if not ret:
+            continue
+
+        frame = cv2.resize(frame, (640, 480))
+
         height, width, _ = frame.shape
-
-        if accumulated_heatmap is None:
-            accumulated_heatmap = np.zeros((height, width), dtype=np.float32)
-
+        frame_area = width * height
         mid_x = width // 2
         mid_y = height // 2
 
         # ---------- FRAME SKIPPING ----------
         frame_count += 1
-
-        if frame_count % 3 == 0:
+        if frame_count % 12 == 0:
+            detect_start = time.time()
             last_boxes, last_count = detect_people(frame)
+            processing_time = time.time() - detect_start
+        else:
+            processing_time = 0
 
         boxes = last_boxes
         count = last_count
 
+        # ---------- ZONE COUNT ----------
         zone_counts = {"A": 0, "B": 0, "C": 0, "D": 0}
 
-        accumulated_heatmap *= 0.96
-
         for (x1, y1, x2, y2) in boxes:
+
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
 
@@ -71,27 +85,32 @@ def run_engine(source):
             else:
                 zone_counts["D"] += 1
 
-            radius = 50
-            sigma = radius / 3
-
-            y_grid, x_grid = np.ogrid[-radius:radius, -radius:radius]
-            gaussian = np.exp(-(x_grid**2 + y_grid**2) / (2 * sigma**2))
-
-            x_start = max(center_x - radius, 0)
-            x_end = min(center_x + radius, width)
-            y_start = max(center_y - radius, 0)
-            y_end = min(center_y + radius, height)
-
-            heat_slice = accumulated_heatmap[y_start:y_end, x_start:x_end]
-
-            g_x_start = max(0, radius - center_x)
-            g_y_start = max(0, radius - center_y)
-            g_x_end = g_x_start + (x_end - x_start)
-            g_y_end = g_y_start + (y_end - y_start)
-
-            heat_slice += gaussian[g_y_start:g_y_end, g_x_start:g_x_end] * 10
-
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        # ---------- DENSITY CALCULATION ----------
+        density = count / frame_area
+
+        # ---------- STATUS CLASSIFICATION ----------
+        if density < density_threshold * 0.7:
+            status = "NORMAL"
+            status_color = (0, 255, 0)
+        elif density < density_threshold:
+            status = "MODERATE"
+            status_color = (0, 255, 255)
+        else:
+            status = "CRITICAL"
+            status_color = (0, 0, 255)
+
+        # ---------- SUSTAINED ALERT LOGIC ----------
+        alert_flag = False
+
+        if density >= density_threshold:
+            if alert_start_time is None:
+                alert_start_time = time.time()
+            elif time.time() - alert_start_time >= sustained_seconds:
+                alert_flag = True
+        else:
+            alert_start_time = None
 
         # ---------- PREDICTION ----------
         recent_counts.append(count)
@@ -99,54 +118,79 @@ def run_engine(source):
             recent_counts.pop(0)
 
         predicted = count
-        alert_flag = False
-
         if len(recent_counts) >= 2:
             growth = (recent_counts[-1] - recent_counts[0]) / len(recent_counts)
             predicted = int(count + growth * prediction_window)
-            if predicted >= threshold:
-                alert_flag = True
 
-        # ---------- HEATMAP ----------
-        normalized = cv2.normalize(accumulated_heatmap, None, 0, 255, cv2.NORM_MINMAX)
-        normalized = normalized.astype(np.uint8)
+        # ---------- DRAW UI ----------
+        cv2.line(frame, (mid_x, 0), (mid_x, height), (255, 255, 255), 1)
+        cv2.line(frame, (0, mid_y), (width, mid_y), (255, 255, 255), 1)
 
-        heat_color = cv2.applyColorMap(normalized, cv2.COLORMAP_JET)
-        overlay = cv2.addWeighted(frame, 0.7, heat_color, 0.4, 0)
+        cv2.putText(frame, f"People: {count}", (20, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
-        cv2.line(overlay, (mid_x, 0), (mid_x, height), (255, 255, 255), 2)
-        cv2.line(overlay, (0, mid_y), (width, mid_y), (255, 255, 255), 2)
+        cv2.putText(frame, f"Predicted: {predicted}", (20, 75),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
-        cv2.putText(overlay, f"People: {count}", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-        cv2.putText(overlay, f"Predicted: {predicted}", (20, 80),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+        cv2.putText(frame, f"Status: {status}",
+                    (width - 200, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    status_color,
+                    2)
 
         if alert_flag:
-            cv2.putText(overlay, "OVER CROWD ALERT!", (20, 120),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+            cv2.putText(frame, "ALERT TRIGGERED",
+                        (width - 250, 80),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.9,
+                        (0, 0, 255),
+                        2)
 
-        # ---------- FPS ----------
+        # ---------- PERFORMANCE METRICS ----------
         current_time = time.time()
-        fps = 1 / (current_time - last_fps_time)
+        time_diff = current_time - last_fps_time
+        if time_diff > 0:
+            fps = 1 / time_diff
+        else:
+            fps = 0
+        
         last_fps_time = current_time
 
-        cv2.putText(overlay, f"FPS: {int(fps)}", (20, 160),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+        cv2.putText(frame, f"FPS: {int(fps)}",
+                    (width - 120, height - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (255, 255, 0),
+                    2)
+
+        if processing_time > 0:
+            cv2.putText(frame, f"Inference: {processing_time:.3f}s",
+                        (20, 110),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6,
+                        (255, 255, 0),
+                        2)
+
+        cv2.putText(frame, f"Source: {source}",
+                    (20, height - 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (200, 200, 200),
+                    1)
 
         # ---------- UPDATE STATE ----------
         with state.lock:
-            state.output_frame = overlay.copy()
+            state.output_frame = frame.copy()
             state.current_count = count
             state.zones = zone_counts
             state.prediction = predicted
             state.alert = alert_flag
+            state.status = status
 
-        # ---------- DATABASE LOG EVERY 1 SECOND ----------
+        # ---------- DATABASE LOG ----------
         if current_time - last_log_time >= 1:
             timestamp = datetime.now().strftime("%H:%M:%S")
-
             insert_log(
                 timestamp,
                 count,
@@ -155,9 +199,6 @@ def run_engine(source):
                 zone_counts["C"],
                 zone_counts["D"]
             )
-
             last_log_time = current_time
-
-        time.sleep(0.01)
 
     cap.release()

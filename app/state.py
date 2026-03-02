@@ -14,6 +14,7 @@ zones = {
 
 prediction = 0
 alert = False
+status = "NORMAL"
 
 camera_source = 0
 engine_running = False
