@@ -143,16 +143,16 @@ git clone https://github.com/manojcodes93/Crowd-Density-Monitoring-System.git
 cd Crowd-Density-Monitoring-System
 ```
 
-2. Install Dependencies
+### 2. Install Dependencies
 ```pip install -r requirements.txt```
 
-4. Start the Server
+### 3. Start the Server
 ``` uvicorn app.main:app --reload ```
 or
 ```
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-6. Open in Browser
+### 4. Open in Browser
 ``` http://127.0.0.1:8000 ```
 
 ---
